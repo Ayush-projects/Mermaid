@@ -1,0 +1,20 @@
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Continue]
+    B -->|No| D[Fix it]
+    D --> B
+    C --> E[Finish]
+
+
+
+gantt
+    title Project Timeline
+    dateFormat  YYYY-MM-DD
+    section Planning
+    Define Project Scope    :done,    p1, 2024-09-01, 2024-09-03
+    Define Requirements     :active,  p2, 2024-09-04, 3d
+    section Development
+    Design and Develop      :         d1, 2024-09-07, 7d
+    Testing                 :         d2, after d1, 5d
+    section Deployment
+    Deployment              :         dp, after d2, 2d
