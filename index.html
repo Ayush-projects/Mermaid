@@ -1,132 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mermaid JS Editor</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Professional Mermaid.js Live Editor</title>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+  <!-- Monaco Editor CSS -->
+  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.min.css">
 </head>
 <body>
-    <div class="navbar">
-        <div class="navbar-title">Mermaid Live Editor</div>
-        <div class="navbar-controls">
-            <!-- Additional controls can be added here -->
-        </div>
-        <div class="navbar-toggle">
-            <label>Auto Sync</label>
-            <input type="checkbox" id="autoSync" checked>
-        </div>
+  <!-- Navbar -->
+  <div class="navbar">
+    <div class="navbar-left">
+      <div class="navbar-title">Mermaid.js Live Editor</div>
     </div>
-    <div class="container">
-        <div class="editor">
-            <textarea id="mermaidCode" placeholder="Write your Mermaid.js code here..."></textarea>
-        </div>
-        <div class="viewer">
-            <div class="controls">
-                <button id="zoomIn" class="control-btn">+</button>
-                <button id="zoomOut" class="control-btn">-</button>
-                <button id="resetZoom" class="control-btn">Reset</button>
-                <button id="saveImage" class="control-btn">Save as Image</button>
-            </div>
-            <div id="mermaidChart" class="chart"></div>
-        </div>
+    <div class="navbar-right">
+      <select id="themeSelector" class="navbar-select">
+        <option value="default">Default Theme</option>
+        <option value="dark">Dark Theme</option>
+        <option value="forest">Forest Theme</option>
+        <option value="neutral">Neutral Theme</option>
+      </select>
+      <label class="switch">
+        <input type="checkbox" id="autoSync" checked>
+        <span class="slider round"></span>
+      </label>
+      <span>Auto Sync</span>
+      <button id="renderBtn" class="btn">Render</button>
     </div>
+  </div>
 
-    <!-- Include Mermaid.js as an ES module -->
-    <script type="module">
-        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  <!-- Split Container -->
+  <div id="splitContainer">
+    <!-- Editor Pane -->
+    <div id="editorPane"></div>
+    <!-- Viewer Pane -->
+    <div id="viewerPane">
+      <div class="controls">
+        <button id="zoomIn" class="control-btn">Zoom In</button>
+        <button id="zoomOut" class="control-btn">Zoom Out</button>
+        <button id="resetZoom" class="control-btn">Reset Zoom</button>
+        <button id="saveImage" class="control-btn">Save as PNG</button>
+      </div>
+      <div id="mermaidChart" class="chart"></div>
+    </div>
+  </div>
 
-        // Initialize Mermaid
-        mermaid.initialize({
-            startOnLoad: false, // We control rendering manually
-            theme: 'default',
-            securityLevel: 'loose', // Allows inline scripts and styles within SVG
+  <!-- Load Libraries -->
+  <!-- Load Mermaid.js -->
+  <script src="mermaid.min.js"></script>
+  <!-- Load Split.js -->
+  <script src="split.min.js"></script>
+  <!-- Load svg-pan-zoom -->
+  <script src="svg-pan-zoom.min.js"></script>
+  <!-- Load Monaco Editor Loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
+
+  <!-- Main Script -->
+  <script>
+    // Ensure the main script runs after all libraries are loaded
+    window.addEventListener('load', function () {
+      // Initialize Mermaid
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+      });
+
+      const editorPane = document.getElementById('editorPane');
+      const chartArea = document.getElementById('mermaidChart');
+      const renderBtn = document.getElementById('renderBtn');
+      const zoomInBtn = document.getElementById('zoomIn');
+      const zoomOutBtn = document.getElementById('zoomOut');
+      const resetZoomBtn = document.getElementById('resetZoom');
+      const saveImageBtn = document.getElementById('saveImage');
+      const autoSync = document.getElementById('autoSync');
+      const themeSelector = document.getElementById('themeSelector');
+      let panZoomInstance;
+
+      // Initialize Split.js
+      Split(['#editorPane', '#viewerPane'], {
+        sizes: [50, 50],
+        minSize: 200,
+        gutterSize: 5,
+        cursor: 'col-resize',
+      });
+
+      // Load Monaco Editor
+      require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs' } });
+      require(['vs/editor/editor.main'], function () {
+        // Register Mermaid language
+        monaco.languages.register({ id: 'mermaid' });
+
+        // Define Mermaid language syntax
+        monaco.languages.setMonarchTokensProvider('mermaid', {
+          tokenizer: {
+            root: [
+              [/%%.*$/, 'comment'],
+              [/\b(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram-v2?|erDiagram|journey|gantt|pie|gitGraph|info|requirementDiagram|c4Diagram)\b/, 'keyword'],
+              [/[{}[\]()<>]/, 'delimiter'],
+              [/".*?"/, 'string'],
+              [/'[^']*'/, 'string'],
+              [/\b\d+(\.\d+)?\b/, 'number'],
+              [/#\w+/, 'color'],
+              [/\w+/, 'identifier'],
+            ],
+          },
         });
 
-        document.addEventListener("DOMContentLoaded", function () {
-            const codeArea = document.getElementById('mermaidCode');
-            const chartArea = document.getElementById('mermaidChart');
-            const zoomInBtn = document.getElementById('zoomIn');
-            const zoomOutBtn = document.getElementById('zoomOut');
-            const resetZoomBtn = document.getElementById('resetZoom');
-            const saveImageBtn = document.getElementById('saveImage');
-            const autoSync = document.getElementById('autoSync');
-            let scale = 1;
-
-            // Function to render Mermaid diagram safely
-            async function renderMermaid() {
-                const code = codeArea.value.trim();
-
-                // Validate if the code is non-empty and chart area exists
-                if (!chartArea || !code) {
-                    chartArea.innerHTML = '<p style="color: red;">Please enter valid Mermaid code!</p>';
-                    return;
-                }
-
-                chartArea.innerHTML = '';
-
-                try {
-                    const { svg } = await mermaid.render('mermaidGraph', code);
-                    chartArea.innerHTML = svg; // Insert the SVG into the target container
-                } catch (error) {
-                    console.error('Error rendering Mermaid diagram:', error);
-                    chartArea.innerHTML = '<p style="color: red;">Invalid Mermaid syntax or rendering error!</p>';
-                }
-            }
-
-            // Event listener for code area input to trigger rendering if auto-sync is enabled
-            codeArea.addEventListener('input', () => {
-                if (autoSync.checked) {
-                    renderMermaid();
-                }
-            });
-
-            // Zoom in functionality
-            zoomInBtn.addEventListener('click', () => {
-                scale += 0.1;
-                chartArea.style.transform = `scale(${scale})`;
-                chartArea.style.transformOrigin = 'top left'; // Ensures scaling starts from top left
-            });
-
-            // Zoom out functionality
-            zoomOutBtn.addEventListener('click', () => {
-                scale = Math.max(scale - 0.1, 0.5);
-                chartArea.style.transform = `scale(${scale})`;
-                chartArea.style.transformOrigin = 'top left';
-            });
-
-            // Reset zoom functionality
-            resetZoomBtn.addEventListener('click', () => {
-                scale = 1;
-                chartArea.style.transform = `scale(${scale})`;
-                chartArea.style.transformOrigin = 'top left';
-            });
-
-            // Save as image functionality
-            saveImageBtn.addEventListener('click', () => {
-                const svg = chartArea.querySelector('svg');
-                if (svg) {
-                    const svgData = new XMLSerializer().serializeToString(svg);
-                    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-                    const url = URL.createObjectURL(svgBlob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = 'mermaid-diagram.svg';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                } else {
-                    alert('No chart to save!');
-                }
-            });
-
-            // Initial render if auto-sync is enabled
-            if (autoSync.checked) {
-                renderMermaid();
-            }
+        // Create the editor
+        const editor = monaco.editor.create(editorPane, {
+          value: `graph TD
+A[Start] --> B{Is it working?}
+B -->|Yes| C[Great]
+B -->|No| D[Fix it]`,
+          language: 'mermaid',
+          theme: 'vs-dark',
+          automaticLayout: true,
+          fontSize: 14,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
         });
-    </script>
+
+        // Function to render Mermaid diagram
+        async function renderMermaid() {
+          const code = editor.getValue().trim();
+
+          if (!chartArea || !code) {
+            chartArea.innerHTML = '<p class="error">Please enter valid Mermaid code!</p>';
+            return;
+          }
+
+          chartArea.innerHTML = '';
+
+          try {
+            // Update Mermaid theme
+            mermaid.initialize({ theme: themeSelector.value });
+            const { svg } = await mermaid.render('mermaidGraph', code);
+            chartArea.innerHTML = svg;
+
+            // Get the SVG element
+            const svgElement = chartArea.querySelector('svg');
+
+            // Set the SVG's width and height to 100%
+            svgElement.setAttribute('width', '100%');
+            svgElement.setAttribute('height', '100%');
+
+            // Ensure the SVG scales correctly
+            svgElement.style.width = '100%';
+            svgElement.style.height = '100%';
+            svgElement.style.display = 'block';
+
+            // Initialize svg-pan-zoom
+            if (panZoomInstance) {
+              panZoomInstance.destroy();
+            }
+            panZoomInstance = svgPanZoom(svgElement, {
+              zoomEnabled: true,
+              controlIconsEnabled: false,
+              fit: true,
+              center: true,
+              minZoom: 0.5,
+              maxZoom: 20,
+            });
+
+          } catch (error) {
+            console.error('Error rendering Mermaid diagram:', error);
+            chartArea.innerHTML = '<p class="error">Invalid Mermaid syntax or rendering error!</p>';
+          }
+        }
+
+        // Event listener for editor changes
+        editor.getModel().onDidChangeContent(() => {
+          if (autoSync.checked) {
+            renderMermaid();
+          }
+        });
+
+        // Render button event
+        renderBtn.addEventListener('click', renderMermaid);
+
+        // Theme selector event
+        themeSelector.addEventListener('change', renderMermaid);
+
+        // Zoom in functionality
+        zoomInBtn.addEventListener('click', () => {
+          if (panZoomInstance) {
+            panZoomInstance.zoomIn();
+          }
+        });
+
+        // Zoom out functionality
+        zoomOutBtn.addEventListener('click', () => {
+          if (panZoomInstance) {
+            panZoomInstance.zoomOut();
+          }
+        });
+
+        // Reset zoom functionality
+        resetZoomBtn.addEventListener('click', () => {
+          if (panZoomInstance) {
+            panZoomInstance.resetZoom();
+            panZoomInstance.fit();
+            panZoomInstance.center();
+          }
+        });
+
+        // Save as PNG functionality
+        saveImageBtn.addEventListener('click', () => {
+          const svg = chartArea.querySelector('svg');
+          if (svg) {
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = function () {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+              const pngFile = canvas.toDataURL('image/png');
+
+              const link = document.createElement('a');
+              link.href = pngFile;
+              link.download = 'mermaid-diagram.png';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            };
+
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+          } else {
+            alert('No chart to save!');
+          }
+        });
+
+        // Initial render
+        renderMermaid();
+      });
+    });
+  </script>
 </body>
 </html>
