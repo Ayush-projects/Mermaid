@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Mermaid.js Live Editor</title>
+  <title>VisiDraw Editor</title>
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
   <!-- Monaco Editor CSS -->
@@ -12,7 +12,7 @@
   <!-- Navbar -->
   <div class="navbar">
     <div class="navbar-left">
-      <div class="navbar-title">Mermaid.js Live Editor</div>
+      <div class="navbar-title">VisiDraw Editor</div>
     </div>
     <div class="navbar-right">
       <select id="themeSelector" class="navbar-select">
@@ -40,7 +40,7 @@
         <button id="zoomIn" class="control-btn">Zoom In</button>
         <button id="zoomOut" class="control-btn">Zoom Out</button>
         <button id="resetZoom" class="control-btn">Reset Zoom</button>
-        <button id="saveImage" class="control-btn">Save as PNG</button>
+        <button id="saveSVG" class="control-btn">Save as SVG</button>
       </div>
       <div id="mermaidChart" class="chart"></div>
     </div>
@@ -58,7 +58,6 @@
 
   <!-- Main Script -->
   <script>
-    // Ensure the main script runs after all libraries are loaded
     window.addEventListener('load', function () {
       // Initialize Mermaid
       mermaid.initialize({
@@ -73,7 +72,7 @@
       const zoomInBtn = document.getElementById('zoomIn');
       const zoomOutBtn = document.getElementById('zoomOut');
       const resetZoomBtn = document.getElementById('resetZoom');
-      const saveImageBtn = document.getElementById('saveImage');
+      const saveSVGBtn = document.getElementById('saveSVG');
       const autoSync = document.getElementById('autoSync');
       const themeSelector = document.getElementById('themeSelector');
       let panZoomInstance;
@@ -81,7 +80,7 @@
       // Initialize Split.js
       Split(['#editorPane', '#viewerPane'], {
         sizes: [50, 50],
-        minSize: 200,
+        minSize: 400,
         gutterSize: 5,
         cursor: 'col-resize',
       });
@@ -110,10 +109,30 @@
 
         // Create the editor
         const editor = monaco.editor.create(editorPane, {
-          value: `graph TD
-A[Start] --> B{Is it working?}
-B -->|Yes| C[Great]
-B -->|No| D[Fix it]`,
+          value: `%% Adding a title to the diagram
+flowchart TD
+    title["How LLM Works"]
+    A([User Input]) --> B[Preprocessing the Input]
+    B --> C{Tokenization}
+    C -->|Tokens Created| D[Model Processes Tokens]
+    D --> E{Generate Response?}
+    E -->|Yes| F[Generate Probabilities for Next Tokens]
+    E -->|No| G[Refine Context Understanding]
+    F --> H[Postprocess Response]
+    H --> I([Provide Response to User])
+    
+%% Styling nodes and shapes for modern UI/UX
+classDef startEnd fill:#FFFFFF,stroke:#E63946,stroke-width:0px,color:black;
+classDef process fill:#A8DADC,stroke:#457B9D,stroke-width:1.5px,color:#1D3557;
+classDef decision fill:#457B9D,stroke:#1D3557,stroke-width:2px,color:white;
+classDef io fill:#F1FAEE,stroke:#A8DADC,stroke-width:1.5px,color:#1D3557;
+classDef output fill:#E63946,stroke:#1D3557,stroke-width:2px,color:white;
+
+class title startEnd;
+class A,I process;
+class B,D,H process;
+class C,E decision;
+class F,G io;`,
           language: 'mermaid',
           theme: 'vs-dark',
           automaticLayout: true,
@@ -137,16 +156,16 @@ B -->|No| D[Fix it]`,
             // Update Mermaid theme
             mermaid.initialize({ theme: themeSelector.value });
             const { svg } = await mermaid.render('mermaidGraph', code);
+            
             chartArea.innerHTML = svg;
 
             // Get the SVG element
             const svgElement = chartArea.querySelector('svg');
+            svgElement.style.maxWidth = '100%';
 
-            // Set the SVG's width and height to 100%
+            // Ensure the full SVG content is rendered and fits correctly
             svgElement.setAttribute('width', '100%');
             svgElement.setAttribute('height', '100%');
-
-            // Ensure the SVG scales correctly
             svgElement.style.width = '100%';
             svgElement.style.height = '100%';
             svgElement.style.display = 'block';
@@ -206,30 +225,30 @@ B -->|No| D[Fix it]`,
           }
         });
 
-        // Save as PNG functionality
-        saveImageBtn.addEventListener('click', () => {
+        // Save as SVG functionality
+        saveSVGBtn.addEventListener('click', () => {
           const svg = chartArea.querySelector('svg');
+          
           if (svg) {
+            const viewBox = svg.getAttribute('viewBox');
+            const width = svg.getAttribute('width');
+            const height = svg.getAttribute('height');
             const svgData = new XMLSerializer().serializeToString(svg);
+
+            // Create an off-screen canvas for full resolution
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const img = new Image();
+            canvas.width = width || 1200; // fallback width
+            canvas.height = height || 800; // fallback height
 
-            img.onload = function () {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              ctx.drawImage(img, 0, 0);
-              const pngFile = canvas.toDataURL('image/png');
-
-              const link = document.createElement('a');
-              link.href = pngFile;
-              link.download = 'mermaid-diagram.png';
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            };
-
-            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+            // Create a Blob with the full SVG content
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const link = document.createElement('a');
+            link.href = svgUrl;
+            link.download = 'mermaid-diagram.svg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
           } else {
             alert('No chart to save!');
           }
